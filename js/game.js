@@ -446,19 +446,19 @@ function isPortraitLayout() {
   return window.innerHeight > window.innerWidth;
 }
 
-/** Логический размер экрана — всегда «ландшафт» (при портрете оси меняются). */
+/** clientX/Y → координаты игры (с учётом принудительного поворота). */
+function pointerToGame(clientX, clientY) {
+  if (!(immersiveEnabled() && isPortraitLayout())) return { x: clientX, y: clientY };
+  // CSS: rotate(90deg), origin top-left, left: 100%
+  return { x: clientY, y: window.innerWidth - clientX };
+}
+
+/** Логический размер экрана — landscape при включённом immersive в портрете. */
 function viewSize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
-  if (h > w) return { w: h, h: w };
+  if (immersiveEnabled() && h > w) return { w: h, h: w };
   return { w, h };
-}
-
-/** clientX/Y → координаты игры (с учётом принудительного поворота). */
-function pointerToGame(clientX, clientY) {
-  if (!isPortraitLayout()) return { x: clientX, y: clientY };
-  // CSS: rotate(90deg), origin top-left, left: 100%
-  return { x: clientY, y: window.innerWidth - clientX };
 }
 
 function resize() {
@@ -471,8 +471,11 @@ function resize() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   canvas._lw = w;
   canvas._lh = h;
-  document.documentElement.classList.toggle("force-landscape", isPortraitLayout());
-  tryLockLandscape();
+  document.documentElement.classList.toggle(
+    "force-landscape",
+    immersiveEnabled() && isPortraitLayout()
+  );
+  if (immersiveEnabled()) tryLockLandscape();
 }
 
 function lw() {
@@ -877,7 +880,7 @@ window.addEventListener("keydown", (e) => {
 });
 
 document.getElementById("startBtn").addEventListener("click", () => {
-  enterImmersive();
+  if (immersiveEnabled()) enterImmersive();
   overlay.classList.add("hidden");
   overlay.setAttribute("aria-hidden", "true");
   gameover.classList.add("hidden");
@@ -890,13 +893,25 @@ document.getElementById("startBtn").addEventListener("click", () => {
 });
 
 document.getElementById("restartBtn").addEventListener("click", () => {
-  enterImmersive();
+  if (immersiveEnabled()) enterImmersive();
   gameover.classList.add("hidden");
   gameover.setAttribute("aria-hidden", "true");
   hud.classList.remove("hidden");
   hint.classList.remove("hidden");
   resetGame();
   state = STATE.PLAY;
+});
+
+document.getElementById("immersiveToggle")?.addEventListener("click", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  setImmersive(!immersivePref);
+});
+
+document.getElementById("fsExitBtn")?.addEventListener("click", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  setImmersive(false);
 });
 
 function isAppDisplay() {
@@ -907,7 +922,48 @@ function isAppDisplay() {
   );
 }
 
+const IMMERSIVE_KEY = "neonRunnerImmersive";
+let immersivePref = true;
+try {
+  const saved = localStorage.getItem(IMMERSIVE_KEY);
+  if (saved === "0") immersivePref = false;
+  if (saved === "1") immersivePref = true;
+} catch (_) {
+  /* ignore */
+}
+
+function immersiveEnabled() {
+  return immersivePref;
+}
+
+function setImmersive(on) {
+  immersivePref = Boolean(on);
+  try {
+    localStorage.setItem(IMMERSIVE_KEY, immersivePref ? "1" : "0");
+  } catch (_) {
+    /* ignore */
+  }
+  syncImmersiveUI();
+  if (immersivePref) enterImmersive();
+  else exitImmersive();
+  resize();
+}
+
+function syncImmersiveUI() {
+  const menuBtn = document.getElementById("immersiveToggle");
+  if (menuBtn) {
+    menuBtn.textContent = immersivePref ? "ПОЛНЫЙ ЭКРАН: ВКЛ" : "ПОЛНЫЙ ЭКРАН: ВЫКЛ";
+    menuBtn.classList.toggle("off", !immersivePref);
+  }
+  const fsBtn = document.getElementById("fsExitBtn");
+  if (fsBtn) {
+    fsBtn.classList.toggle("hidden", !immersivePref);
+    fsBtn.title = "Выйти из полного экрана";
+  }
+}
+
 function tryLockLandscape() {
+  if (!immersiveEnabled()) return;
   try {
     if (screen.orientation && screen.orientation.lock) {
       screen.orientation.lock("landscape").catch(() => {});
@@ -923,7 +979,35 @@ function tryLockLandscape() {
   }
 }
 
+function tryUnlockOrientation() {
+  try {
+    if (screen.orientation && screen.orientation.unlock) {
+      screen.orientation.unlock();
+    }
+  } catch (_) {
+    /* ignore */
+  }
+}
+
+function exitImmersive() {
+  document.documentElement.classList.remove("force-landscape");
+  tryUnlockOrientation();
+  const exit =
+    document.exitFullscreen ||
+    document.webkitExitFullscreen ||
+    document.webkitCancelFullScreen;
+  if (exit && (document.fullscreenElement || document.webkitFullscreenElement)) {
+    try {
+      const p = exit.call(document);
+      if (p && typeof p.catch === "function") p.catch(() => {});
+    } catch (_) {
+      /* ignore */
+    }
+  }
+}
+
 function enterImmersive() {
+  if (!immersiveEnabled()) return;
   const root = document.documentElement;
   const req =
     root.requestFullscreen ||
@@ -3266,6 +3350,7 @@ async function boot() {
   );
 
   initSettingsUI();
+  syncImmersiveUI();
   showInstallHint();
 
   try {

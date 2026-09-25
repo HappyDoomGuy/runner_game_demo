@@ -108,6 +108,39 @@ html.force-landscape #app {
 
 .hud-right {
   text-align: right;
+  pointer-events: none;
+}
+
+.fs-exit {
+  pointer-events: auto;
+  margin-top: 10px;
+  margin-left: auto;
+  width: 40px;
+  min-width: 40px;
+  padding: 8px 0;
+  font-size: 16px;
+  letter-spacing: 0;
+  color: var(--cyan);
+  background: rgba(5, 1, 15, 0.7);
+  border: 1px solid rgba(45, 226, 230, 0.45);
+  box-shadow: 0 0 12px rgba(45, 226, 230, 0.25);
+  display: block;
+}
+
+.ghost-btn {
+  margin-top: 10px;
+  color: var(--cyan);
+  background: transparent;
+  border: 1px solid rgba(45, 226, 230, 0.45);
+  box-shadow: none;
+  letter-spacing: 0.1em;
+  font-size: 12px;
+  padding: 10px 14px;
+}
+
+.ghost-btn.off {
+  color: var(--muted);
+  border-color: rgba(127, 138, 168, 0.45);
 }
 
 .hp {
