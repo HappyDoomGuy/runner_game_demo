@@ -442,16 +442,37 @@ async function loadAll() {
   assets.fx.boom = [boom1, boom2, boom3, boom4, boom5, boom6];
 }
 
+function isPortraitLayout() {
+  return window.innerHeight > window.innerWidth;
+}
+
+/** Логический размер экрана — всегда «ландшафт» (при портрете оси меняются). */
+function viewSize() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  if (h > w) return { w: h, h: w };
+  return { w, h };
+}
+
+/** clientX/Y → координаты игры (с учётом принудительного поворота). */
+function pointerToGame(clientX, clientY) {
+  if (!isPortraitLayout()) return { x: clientX, y: clientY };
+  // CSS: rotate(90deg), origin top-left, left: 100%
+  return { x: clientY, y: window.innerWidth - clientX };
+}
+
 function resize() {
+  const { w, h } = viewSize();
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  canvas.width = Math.floor(window.innerWidth * dpr);
-  canvas.height = Math.floor(window.innerHeight * dpr);
-  canvas.style.width = `${window.innerWidth}px`;
-  canvas.style.height = `${window.innerHeight}px`;
+  canvas.width = Math.floor(w * dpr);
+  canvas.height = Math.floor(h * dpr);
+  canvas.style.width = `${w}px`;
+  canvas.style.height = `${h}px`;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  // logical size for gameplay uses CSS pixels
-  canvas._lw = window.innerWidth;
-  canvas._lh = window.innerHeight;
+  canvas._lw = w;
+  canvas._lh = h;
+  document.documentElement.classList.toggle("force-landscape", isPortraitLayout());
+  tryLockLandscape();
 }
 
 function lw() {
@@ -730,20 +751,21 @@ function clearPointerState() {
 function onPointerDown(e) {
   if (isStaleMouse(e)) return;
   if (e.cancelable) e.preventDefault();
-  const p = e.touches ? e.touches[0] : e;
-  touch.x = p.clientX;
-  touch.y = p.clientY;
-  touch.aimX = p.clientX;
-  touch.aimY = p.clientY;
+  const raw = e.touches ? e.touches[0] : e;
+  const p = pointerToGame(raw.clientX, raw.clientY);
+  touch.x = p.x;
+  touch.y = p.y;
+  touch.aimX = p.x;
+  touch.aimY = p.y;
   touch.t = performance.now();
   touch.active = true;
   touch.gestured = false;
   touch.didAutofire = false;
   touch.pointerType = e.touches ? "touch" : "mouse";
   // тап впереди героя — новое направление (палец слева только «держит» огонь)
-  if (state === STATE.PLAY && p.clientX > player.x + player.w * 0.4) {
-    player.lastAimX = p.clientX;
-    player.lastAimY = p.clientY;
+  if (state === STATE.PLAY && p.x > player.x + player.w * 0.4) {
+    player.lastAimX = p.x;
+    player.lastAimY = p.y;
   }
 }
 
@@ -779,9 +801,10 @@ function onPointerMove(e) {
   if (!touch.active) return;
   if (isStaleMouse(e)) return;
   if (e.cancelable) e.preventDefault();
-  const p = e.touches ? e.touches[0] : e;
-  updateAimFromPointer(p.clientX, p.clientY);
-  trySwipeGesture(p.clientX, p.clientY);
+  const raw = e.touches ? e.touches[0] : e;
+  const p = pointerToGame(raw.clientX, raw.clientY);
+  updateAimFromPointer(p.x, p.y);
+  trySwipeGesture(p.x, p.y);
 }
 
 function onPointerUp(e) {
@@ -790,9 +813,10 @@ function onPointerUp(e) {
     return;
   }
   if (!touch.active) return;
-  const p = e.changedTouches ? e.changedTouches[0] : e;
-  const dx = p.clientX - touch.x;
-  const dy = p.clientY - touch.y;
+  const raw = e.changedTouches ? e.changedTouches[0] : e;
+  const p = pointerToGame(raw.clientX, raw.clientY);
+  const dx = p.x - touch.x;
+  const dy = p.y - touch.y;
   const dt = performance.now() - touch.t;
   const alreadyGestured = touch.gestured;
   const didAutofire = touch.didAutofire;
@@ -816,9 +840,9 @@ function onPointerUp(e) {
   }
   // одиночный выстрел только если не было автоогня / жеста
   if (!alreadyGestured && !didAutofire && dt < 280 && Math.hypot(dx, dy) < 28) {
-    player.lastAimX = p.clientX;
-    player.lastAimY = p.clientY;
-    shoot(p.clientX, p.clientY);
+    player.lastAimX = p.x;
+    player.lastAimY = p.y;
+    shoot(p.x, p.y);
   }
 }
 
@@ -883,26 +907,41 @@ function isAppDisplay() {
   );
 }
 
+function tryLockLandscape() {
+  try {
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock("landscape").catch(() => {});
+    } else if (screen.lockOrientation) {
+      screen.lockOrientation("landscape");
+    } else if (screen.mozLockOrientation) {
+      screen.mozLockOrientation("landscape");
+    } else if (screen.msLockOrientation) {
+      screen.msLockOrientation("landscape");
+    }
+  } catch (_) {
+    /* браузер может запретить вне fullscreen / PWA */
+  }
+}
+
 function enterImmersive() {
   const root = document.documentElement;
   const req =
     root.requestFullscreen ||
     root.webkitRequestFullscreen ||
     root.webkitRequestFullScreen;
-  if (!req || document.fullscreenElement || document.webkitFullscreenElement) return;
-  try {
-    const p = req.call(root, { navigationUI: "hide" });
-    if (p && typeof p.catch === "function") p.catch(() => {});
-  } catch (_) {
-    /* iOS Safari часто блокирует FS вне PWA */
-  }
-  // на части Android WebView помогает lock landscape
-  try {
-    if (screen.orientation && screen.orientation.lock) {
-      screen.orientation.lock("landscape").catch(() => {});
+  if (req && !document.fullscreenElement && !document.webkitFullscreenElement) {
+    try {
+      const p = req.call(root, { navigationUI: "hide" });
+      if (p && typeof p.then === "function") {
+        p.then(() => tryLockLandscape()).catch(() => tryLockLandscape());
+      } else {
+        tryLockLandscape();
+      }
+    } catch (_) {
+      tryLockLandscape();
     }
-  } catch (_) {
-    /* ignore */
+  } else {
+    tryLockLandscape();
   }
 }
 
@@ -3211,6 +3250,10 @@ async function boot() {
     if (state === STATE.PLAY) {
       player.y = Math.min(player.y, standY() - player.h);
     }
+  });
+  window.addEventListener("orientationchange", () => {
+    setTimeout(resize, 50);
+    setTimeout(resize, 300);
   });
   // prevent scroll/bounce — except start-panel settings / scrollable panel
   document.body.addEventListener(
