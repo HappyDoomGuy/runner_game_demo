@@ -43,7 +43,7 @@ body {
     var(--bg);
 }
 
-/* Портрет → принудительный landscape (игра всегда горизонтальная) */
+/* Портрет → принудительный landscape (размеры задаёт JS) */
 html.force-landscape,
 html.force-landscape body {
   width: 100%;
@@ -53,12 +53,8 @@ html.force-landscape body {
 
 html.force-landscape #app {
   inset: auto;
-  top: 0;
-  left: 100%;
-  width: 100dvh;
-  height: 100dvw;
-  transform: rotate(90deg);
-  transform-origin: top left;
+  position: fixed;
+  overflow: hidden;
 }
 
 #game {
@@ -255,6 +251,11 @@ html.force-landscape #app {
     0 0 40px rgba(255, 43, 214, 0.18);
   backdrop-filter: blur(8px);
   touch-action: pan-y;
+}
+
+html.force-landscape .panel {
+  width: min(86vh, 420px);
+  max-height: min(86vw, 720px);
 }
 
 .eyebrow {

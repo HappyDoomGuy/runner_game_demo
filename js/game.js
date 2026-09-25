@@ -47,6 +47,7 @@ const game = {
   bossIndex: 0,
   bossWarn: 0,
   bossIntro: "",
+  scale: 1,
 };
 
 /** Каталог боссов. Очередь и дистанция — в settings. */
@@ -234,8 +235,24 @@ const GRAVITY = 2200;
 const JUMP_V = -920;
 const SWIPE_MIN = 24;
 const SLIDE_DUR = 0.62;
+/** Референс высоты landscape — на меньших экранах всё пропорционально сжимается. */
+const REF_VIEW_H = 420;
+const BASE_PLAYER_W = 90;
+const BASE_PLAYER_H = 106;
 /** Кадры бега, где ноги вместе (цикл 0–14). */
 const SLIDE_LEG_FRAMES = [0, 14];
+
+function sz(n) {
+  return Math.round(n * (game.scale || 1));
+}
+
+function grav() {
+  return GRAVITY * (game.scale || 1);
+}
+
+function jumpImpulse() {
+  return JUMP_V * (game.scale || 1);
+}
 
 function nearestSlideFrame(frame) {
   let best = SLIDE_LEG_FRAMES[0];
@@ -443,38 +460,82 @@ async function loadAll() {
 }
 
 function isPortraitLayout() {
-  return window.innerHeight > window.innerWidth;
+  const { w, h } = rawViewSize();
+  return h > w;
+}
+
+function rawViewSize() {
+  const vv = window.visualViewport;
+  if (vv && vv.width > 0 && vv.height > 0) {
+    return { w: Math.round(vv.width), h: Math.round(vv.height) };
+  }
+  return { w: window.innerWidth, h: window.innerHeight };
 }
 
 /** clientX/Y → координаты игры (с учётом принудительного поворота). */
 function pointerToGame(clientX, clientY) {
   if (!(immersiveEnabled() && isPortraitLayout())) return { x: clientX, y: clientY };
-  // CSS: rotate(90deg), origin top-left, left: 100%
-  return { x: clientY, y: window.innerWidth - clientX };
+  const raw = rawViewSize();
+  // CSS: rotate(90deg), origin top-left, left: raw.w
+  return { x: clientY, y: raw.w - clientX };
 }
 
 /** Логический размер экрана — landscape при включённом immersive в портрете. */
 function viewSize() {
-  const w = window.innerWidth;
-  const h = window.innerHeight;
+  const { w, h } = rawViewSize();
   if (immersiveEnabled() && h > w) return { w: h, h: w };
   return { w, h };
 }
 
+function applyWorldScale() {
+  const next = Math.max(0.5, Math.min(1, lh() / REF_VIEW_H));
+  const feet = player.y + player.h;
+  const wasGround = player.onGround;
+  game.scale = next;
+  player.w = Math.round(BASE_PLAYER_W * next);
+  player.h = Math.round(BASE_PLAYER_H * next);
+  if (wasGround) player.y = standY() - player.h;
+  else player.y = feet - player.h;
+}
+
 function resize() {
+  const raw = rawViewSize();
   const { w, h } = viewSize();
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   canvas.width = Math.floor(w * dpr);
   canvas.height = Math.floor(h * dpr);
-  canvas.style.width = `${w}px`;
-  canvas.style.height = `${h}px`;
+  canvas.style.width = "100%";
+  canvas.style.height = "100%";
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   canvas._lw = w;
   canvas._lh = h;
-  document.documentElement.classList.toggle(
-    "force-landscape",
-    immersiveEnabled() && isPortraitLayout()
-  );
+
+  const force = immersiveEnabled() && raw.h > raw.w;
+  const app = document.getElementById("app");
+  document.documentElement.classList.toggle("force-landscape", force);
+  if (app) {
+    if (force) {
+      app.style.width = `${w}px`;
+      app.style.height = `${h}px`;
+      app.style.left = `${raw.w}px`;
+      app.style.top = "0px";
+      app.style.right = "auto";
+      app.style.bottom = "auto";
+      app.style.transform = "rotate(90deg)";
+      app.style.transformOrigin = "top left";
+    } else {
+      app.style.width = "";
+      app.style.height = "";
+      app.style.left = "";
+      app.style.top = "";
+      app.style.right = "";
+      app.style.bottom = "";
+      app.style.transform = "";
+      app.style.transformOrigin = "";
+    }
+  }
+
+  applyWorldScale();
   if (immersiveEnabled()) tryLockLandscape();
 }
 
@@ -573,7 +634,7 @@ function updateHud() {
 function jump() {
   if (!player.onGround || state !== STATE.PLAY) return;
   if (player.slideT > 0) return;
-  player.vy = JUMP_V;
+  player.vy = jumpImpulse();
   player.onGround = false;
   player.anim = "jump";
   // пропускаем кадры «приседания» — сразу полёт
@@ -1074,11 +1135,11 @@ function spawnEnemy() {
   const x = lw() + 60;
 
   if (roll < 0.65) {
-    const h = 92;
-    const w = 100;
+    const h = sz(92);
+    const w = sz(100);
     const y = sY - h;
     // пешие не появляются внутри/на препятствии
-    if (spawnBlockedByObstacle(x, y, w, h, 48)) return;
+    if (spawnBlockedByObstacle(x, y, w, h, sz(48))) return;
     enemies.push({
       type: "walker",
       x,
@@ -1096,12 +1157,12 @@ function spawnEnemy() {
       deadT: 0,
     });
   } else {
-    const h = 58;
-    const w = 62;
-    const hover = 100 + Math.random() * 50;
+    const h = sz(58);
+    const w = sz(62);
+    const hover = sz(100) + Math.random() * sz(50);
     const y = sY - h - hover;
     // дроны тоже не клипуются в высокие объекты
-    if (spawnBlockedByObstacle(x, y, w, h, 20)) return;
+    if (spawnBlockedByObstacle(x, y, w, h, sz(20))) return;
     enemies.push({
       type: "drone",
       x,
@@ -1133,16 +1194,16 @@ function spawnObstacle() {
   let h;
   if (roll < 0.34) {
     kind = "crate";
-    w = 72 + Math.random() * 28;
-    h = 56 + Math.floor(Math.random() * 16);
+    w = sz(72) + Math.random() * sz(28);
+    h = sz(56) + Math.floor(Math.random() * sz(16));
   } else if (roll < 0.67) {
     kind = "wire";
-    w = 110 + Math.random() * 50;
-    h = 38 + Math.floor(Math.random() * 10);
+    w = sz(110) + Math.random() * sz(50);
+    h = sz(38) + Math.floor(Math.random() * sz(10));
   } else {
     kind = "burner";
-    w = 88 + Math.random() * 36;
-    h = 64 + Math.floor(Math.random() * 22);
+    w = sz(88) + Math.random() * sz(36);
+    h = sz(64) + Math.floor(Math.random() * sz(22));
   }
 
   const y = sY - h;
@@ -1240,19 +1301,20 @@ function hurtPlayer(amount = 1, reason = "УРОН") {
 
 function playerHitbox() {
   // подкат — низкий хитбокс (уклонение от пуль / лазера)
+  const s = game.scale || 1;
   if (player.slideT > 0) {
     return {
-      x: player.x + 20,
-      y: player.y + player.h - 34,
-      w: player.w - 36,
-      h: 28,
+      x: player.x + 20 * s,
+      y: player.y + player.h - 34 * s,
+      w: player.w - 36 * s,
+      h: 28 * s,
     };
   }
   return {
-    x: player.x + 28,
-    y: player.y + 28,
-    w: player.w - 52,
-    h: player.h - 36,
+    x: player.x + 28 * s,
+    y: player.y + 28 * s,
+    w: player.w - 52 * s,
+    h: player.h - 36 * s,
   };
 }
 
@@ -1467,18 +1529,18 @@ function spawnBoss() {
   let grounded = false;
 
   if (def.id === "titan") {
-    w = 240;
-    h = 200;
+    w = sz(240);
+    h = sz(200);
     y = sY - h;
     grounded = true;
   } else if (def.id === "helldrone") {
-    w = 150;
-    h = 118;
-    y = sY - h - 130;
+    w = sz(150);
+    h = sz(118);
+    y = sY - h - sz(130);
   } else {
-    w = 120;
-    h = 120;
-    y = sY - h - 100;
+    w = sz(120);
+    h = sz(120);
+    y = sY - h - sz(100);
   }
 
   const frames = assets.bosses[def.id] || [];
@@ -1577,8 +1639,8 @@ function fireHelldroneSaws(n = 3) {
       vx: Math.cos(launchAng) * speed,
       vy: Math.sin(launchAng) * speed,
       grav: 0,
-      w: 42,
-      h: 42,
+      w: sz(42),
+      h: sz(42),
       hp: 2,
       life: 5.2,
       spin: Math.random() * Math.PI,
@@ -1586,7 +1648,7 @@ function fireHelldroneSaws(n = 3) {
       home: true,
       homeDelay: 0.45 + i * 0.15,
       homeStr: 2.4,
-      maxSpeed: 210,
+      maxSpeed: 210 * (game.scale || 1),
       screenSpace: true,
       flash: 0,
     });
@@ -1603,8 +1665,8 @@ function fireBossMortars(n = 3, look = "rocket") {
       vx: -100 - Math.random() * 80 - i * 20,
       vy: -320 - Math.random() * 100,
       grav: 540,
-      w: isDrone ? 36 : 24,
-      h: isDrone ? 34 : 24,
+      w: isDrone ? sz(36) : sz(24),
+      h: isDrone ? sz(34) : sz(24),
       hp: 1,
       life: 5,
       spin: 0,
@@ -1633,8 +1695,8 @@ function fireBossRocketFan(count = 5, spread = 0.24) {
       vx: Math.cos(ang) * speed,
       vy: Math.sin(ang) * speed,
       grav: 20,
-      w: 26,
-      h: 26,
+      w: sz(26),
+      h: sz(26),
       hp: 1,
       life: 4.5,
       spin: 0,
@@ -1646,8 +1708,8 @@ function fireBossRocketFan(count = 5, spread = 0.24) {
 function plantMine() {
   if (!boss) return;
   const sY = standY();
-  const w = 56;
-  const h = 32;
+  const w = sz(56);
+  const h = sz(32);
   hazards.push({
     type: "mine",
     x: boss.x - 40,
@@ -1726,8 +1788,8 @@ function startBossLaser() {
   boss.laserDrone = {
     x: boss.x + boss.w * 0.42,
     y: boss.y + boss.h * 0.72,
-    w: 44,
-    h: 38,
+    w: sz(44),
+    h: sz(38),
     vx: -55,
     phase: "drop", // drop → warn → fire
     t: 0.6,
@@ -2306,7 +2368,7 @@ function update(dt) {
 
   // player physics
   const prevBottom = player.y + player.h;
-  player.vy += GRAVITY * dt;
+  player.vy += grav() * dt;
   player.y += player.vy * dt;
 
   // сначала двигаем препятствия, потом решаем посадку / урон
@@ -3339,6 +3401,10 @@ async function boot() {
     setTimeout(resize, 50);
     setTimeout(resize, 300);
   });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", () => resize());
+    window.visualViewport.addEventListener("scroll", () => resize());
+  }
   // prevent scroll/bounce — except start-panel settings / scrollable panel
   document.body.addEventListener(
     "touchmove",
