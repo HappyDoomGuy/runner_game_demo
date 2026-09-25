@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#05010f" />
+  <title>NEON RUNNER — Cyber Scroll Shooter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="game"></canvas>
+
+    <div id="hud" class="hidden">
+      <div class="hud-left">
+        <div class="brand">NEON <span>RUNNER</span></div>
+        <div class="stat">SCORE <b id="score">0</b></div>
+      </div>
+      <div class="hud-right">
+        <div class="stat">DIST <b id="dist">0</b>m</div>
+        <div class="hp" id="hp" aria-label="health"></div>
+        <div class="buffs" id="buffs"></div>
+      </div>
+    </div>
+
+    <div id="hint" class="hidden">
+      <span>TAP — стрельба · SWIPE ↑ прыжок · ↓ подкат</span>
+      <span>бонусы собирай собой</span>
+    </div>
+
+    <div id="overlay" class="screen">
+      <div class="scanlines"></div>
+      <div class="panel">
+        <p class="eyebrow">SECTOR 7 · NIGHT CITY</p>
+        <h1>NEON<br />RUNNER</h1>
+        <p class="tag">Горизонтальный скролл-шутер · киберпанк нуар</p>
+        <ul class="controls">
+          <li><kbd>TAP</kbd> стрельба в точку</li>
+          <li><kbd>SWIPE ↑</kbd> прыжок · <kbd>↓</kbd> подкат</li>
+          <li><kbd>S</kbd> / <kbd>C</kbd> подкат · бонусы телом</li>
+        </ul>
+
+        <div class="settings hidden" id="settings">
+          <p class="settings-title">НАСТРОЙКИ БОССОВ</p>
+          <label class="settings-row">
+            <span>Дистанция</span>
+            <select id="bossEvery">
+              <option value="50">50 m</option>
+              <option value="100">100 m</option>
+              <option value="200" selected>200 m</option>
+              <option value="300">300 m</option>
+              <option value="500">500 m</option>
+              <option value="1000">1000 m</option>
+            </select>
+          </label>
+          <p class="settings-sub">Очередность (↑↓)</p>
+          <div class="boss-order" id="bossOrderList"></div>
+        </div>
+
+        <button id="startBtn" type="button">НАЧАТЬ ЗАБЕГ</button>
+        <p class="credits">Ассеты: OpenGameArt / ansimuz · CC0 &amp; CC-BY</p>
+      </div>
+    </div>
+
+    <div id="gameover" class="screen hidden" aria-hidden="true">
+      <div class="scanlines"></div>
+      <div class="panel">
+        <p class="eyebrow">SIGNAL LOST</p>
+        <h2>GAME OVER</h2>
+        <p class="result">Счёт: <b id="finalScore">0</b></p>
+        <p class="result">Дистанция: <b id="finalDist">0</b>m</p>
+        <button id="restartBtn" type="button">СНОВА В СЕТЬ</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/game.js"></script>
+</body>
+</html>
