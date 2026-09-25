@@ -1594,7 +1594,7 @@ function bossHitbox() {
   };
 }
 
-function fireEnemyOrb(sx, sy, angle, speed, size = 14) {
+function fireEnemyOrb(sx, sy, angle, speed, size = 14, look = "orb") {
   const c = Math.cos(angle);
   const s = Math.sin(angle);
   bullets.push({
@@ -1607,8 +1607,17 @@ function fireEnemyOrb(sx, sy, angle, speed, size = 14) {
     w: size,
     h: size,
     enemy: true,
-    orb: true,
+    orb: look !== "spike",
+    look,
+    frame: Math.floor(Math.random() * 7),
+    frameT: Math.random() * 0.1,
+    spin: Math.random() * Math.PI * 2,
   });
+}
+
+/** Капли Spike-core — мини-копии босса. */
+function fireSpikeDrop(sx, sy, angle, speed, size = 18) {
+  fireEnemyOrb(sx, sy, angle, speed, size, "spike");
 }
 
 function fireBossVolley(spread = 0.35, count = 5, speedMul = 1) {
@@ -1620,8 +1629,11 @@ function fireBossVolley(spread = 0.35, count = 5, speedMul = 1) {
   const base = Math.atan2(cy - sy, cx - sx);
   const speed = Math.max(520, game.speed + 280) * speedMul;
   const mid = (count - 1) / 2;
+  const spike = boss.id === "spikecore";
   for (let i = 0; i < count; i++) {
-    fireEnemyOrb(sx, sy, base + (i - mid) * spread, speed, 15);
+    const ang = base + (i - mid) * spread;
+    if (spike) fireSpikeDrop(sx, sy, ang, speed, sz(18));
+    else fireEnemyOrb(sx, sy, ang, speed, 15);
   }
 }
 
@@ -1945,12 +1957,14 @@ function fireBossNeedles() {
   if (!boss) return;
   const speed = Math.max(640, game.speed + 360);
   const ys = [
-    standY() - 40,
-    standY() - 90,
-    standY() - 140,
+    standY() - sz(40),
+    standY() - sz(90),
+    standY() - sz(140),
   ];
+  const spike = boss.id === "spikecore";
   for (const yy of ys) {
-    fireEnemyOrb(boss.x + 10, yy, Math.PI, speed, 12);
+    if (spike) fireSpikeDrop(boss.x + 10, yy, Math.PI, speed, sz(16));
+    else fireEnemyOrb(boss.x + 10, yy, Math.PI, speed, 12);
   }
 }
 
@@ -1959,11 +1973,13 @@ function fireBossArc(count = 7) {
   const sx = boss.x + boss.w * 0.3;
   const sy = boss.y + boss.h * 0.5;
   const speed = Math.max(480, game.speed + 260);
+  const spike = boss.id === "spikecore";
   // полукруг влево к игроку
   for (let i = 0; i < count; i++) {
     const t = i / (count - 1);
     const ang = -Math.PI * 0.75 + t * Math.PI * 0.9;
-    fireEnemyOrb(sx, sy, ang, speed, 13);
+    if (spike) fireSpikeDrop(sx, sy, ang, speed, sz(17));
+    else fireEnemyOrb(sx, sy, ang, speed, 13);
   }
 }
 
@@ -2465,6 +2481,15 @@ function update(dt) {
     b.x += b.vx * dt;
     b.y += b.vy * dt;
     b.life -= dt;
+    if (b.look === "spike") {
+      b.spin = (b.spin || 0) + dt * 9;
+      b.frameT = (b.frameT || 0) + dt;
+      if (b.frameT >= 0.07) {
+        b.frameT = 0;
+        const n = assets.bosses.spikecore?.length || 7;
+        b.frame = ((b.frame || 0) + 1) % n;
+      }
+    }
   }
   bullets = bullets.filter(
     (b) => b.life > 0 && b.x > -40 && b.x < lw() + 40 && b.y > -40 && b.y < lh() + 40
@@ -2587,7 +2612,7 @@ function update(dt) {
         )
       ) {
         b.life = 0;
-        hurtPlayer(1, "ПУЛЯ!");
+        hurtPlayer(1, b.look === "spike" ? "ШИП!" : "ПУЛЯ!");
       }
       continue;
     }
@@ -3140,6 +3165,33 @@ function drawObstacle(o) {
 function drawBullets() {
   for (const b of bullets) {
     ctx.save();
+    if (b.enemy && b.look === "spike") {
+      const frames = assets.bosses.spikecore || [];
+      const img = frames.length ? frames[(b.frame || 0) % frames.length] : null;
+      const s = Math.max(b.w, b.h);
+      ctx.translate(b.x, b.y);
+      ctx.rotate(b.spin || 0);
+      ctx.shadowColor = "#c0ff3e";
+      ctx.shadowBlur = 14;
+      if (img) {
+        ctx.drawImage(img, -s * 0.5, -s * 0.5, s, s);
+      } else {
+        ctx.fillStyle = "#c0ff3e";
+        ctx.beginPath();
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2;
+          const rr = i % 2 === 0 ? s * 0.5 : s * 0.28;
+          const x = Math.cos(a) * rr;
+          const y = Math.sin(a) * rr;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
+      continue;
+    }
     if (b.enemy) {
       ctx.shadowColor = "#ff3355";
       ctx.shadowBlur = 18;
