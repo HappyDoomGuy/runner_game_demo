@@ -18,17 +18,24 @@
 html,
 body {
   margin: 0;
+  width: 100%;
   height: 100%;
+  height: 100dvh;
   background: var(--bg);
   color: var(--text);
   font-family: "Share Tech Mono", monospace;
   overflow: hidden;
+  position: fixed;
+  inset: 0;
+  overscroll-behavior: none;
 }
 
 #app {
-  position: relative;
+  position: fixed;
+  inset: 0;
   width: 100%;
   height: 100%;
+  height: 100dvh;
   overflow: hidden;
   background:
     radial-gradient(ellipse at 20% 10%, rgba(255, 43, 214, 0.18), transparent 45%),
@@ -375,6 +382,17 @@ button:active {
   color: var(--muted);
   font-size: 10px;
   letter-spacing: 0.04em;
+}
+
+.install-hint {
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  color: var(--cyan);
+  font-size: 11px;
+  line-height: 1.45;
+  letter-spacing: 0.04em;
+  border: 1px solid rgba(45, 226, 230, 0.35);
+  background: rgba(5, 1, 15, 0.45);
 }
 
 .result {

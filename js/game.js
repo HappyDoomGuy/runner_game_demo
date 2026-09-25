@@ -853,6 +853,7 @@ window.addEventListener("keydown", (e) => {
 });
 
 document.getElementById("startBtn").addEventListener("click", () => {
+  enterImmersive();
   overlay.classList.add("hidden");
   overlay.setAttribute("aria-hidden", "true");
   gameover.classList.add("hidden");
@@ -865,6 +866,7 @@ document.getElementById("startBtn").addEventListener("click", () => {
 });
 
 document.getElementById("restartBtn").addEventListener("click", () => {
+  enterImmersive();
   gameover.classList.add("hidden");
   gameover.setAttribute("aria-hidden", "true");
   hud.classList.remove("hidden");
@@ -872,6 +874,50 @@ document.getElementById("restartBtn").addEventListener("click", () => {
   resetGame();
   state = STATE.PLAY;
 });
+
+function isAppDisplay() {
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.matchMedia("(display-mode: fullscreen)").matches ||
+    window.navigator.standalone === true
+  );
+}
+
+function enterImmersive() {
+  const root = document.documentElement;
+  const req =
+    root.requestFullscreen ||
+    root.webkitRequestFullscreen ||
+    root.webkitRequestFullScreen;
+  if (!req || document.fullscreenElement || document.webkitFullscreenElement) return;
+  try {
+    const p = req.call(root, { navigationUI: "hide" });
+    if (p && typeof p.catch === "function") p.catch(() => {});
+  } catch (_) {
+    /* iOS Safari часто блокирует FS вне PWA */
+  }
+  // на части Android WebView помогает lock landscape
+  try {
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock("landscape").catch(() => {});
+    }
+  } catch (_) {
+    /* ignore */
+  }
+}
+
+function showInstallHint() {
+  const el = document.getElementById("installHint");
+  if (!el || isAppDisplay()) return;
+  const ua = navigator.userAgent || "";
+  const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const isAndroid = /Android/i.test(ua);
+  if (!isIOS && !isAndroid) return;
+  el.textContent = isIOS
+    ? "На весь экран как приложение: Поделиться → На экран «Домой»"
+    : "На весь экран как приложение: меню ⋮ → «Установить приложение» / «На главный экран»";
+  el.classList.remove("hidden");
+}
 
 /* ---------- Spawning ---------- */
 function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh, margin = 0) {
@@ -3177,6 +3223,7 @@ async function boot() {
   );
 
   initSettingsUI();
+  showInstallHint();
 
   try {
     await loadAll();
